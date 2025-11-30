@@ -113,7 +113,7 @@
 
     main {
       flex: 1;
-      padding: 1.25rem 1.5rem 1.75rem;
+      padding: 1.25rem 1.5rem 1rem;
     }
 
     .content-inner {
@@ -168,8 +168,6 @@
       }
     }
 
-    /* Recipe list */
-
     .recipe-list {
       display: flex;
       flex-direction: column;
@@ -218,8 +216,6 @@
       font-size: 0.75rem;
       color: var(--muted);
     }
-
-    /* Detail view */
 
     .detail-header {
       margin-bottom: 0.5rem;
@@ -335,6 +331,102 @@
       color: #b03030;
       padding: 0.75rem 0.25rem;
     }
+
+    /* Importer footer – small, out of the way */
+
+    .importer-footer {
+      border-top: 1px solid var(--border);
+      padding: 0.5rem 1.5rem 1rem;
+      background: #f5f8f6;
+    }
+
+    .importer-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .importer-details {
+      border-radius: var(--radius-md);
+      border: 1px dashed var(--border);
+      padding: 0.35rem 0.6rem 0.5rem;
+      background: #f8fbf8;
+    }
+
+    .importer-details summary {
+      cursor: pointer;
+      list-style: none;
+      font-weight: 500;
+      color: #708270;
+    }
+
+    .importer-details summary::marker {
+      display: none;
+    }
+
+    .importer-details summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .importer-details summary span {
+      font-size: 0.75rem;
+    }
+
+    .importer-body {
+      margin-top: 0.4rem;
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+      gap: 0.6rem;
+    }
+
+    @media (max-width: 800px) {
+      .importer-body {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    .importer-col label {
+      display: block;
+      margin-bottom: 0.25rem;
+      font-size: 0.76rem;
+    }
+
+    .importer-col input[type="file"] {
+      font-size: 0.75rem;
+      width: 100%;
+    }
+
+    .importer-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      align-items: center;
+      margin-top: 0.35rem;
+    }
+
+    .importer-btn {
+      font-size: 0.76rem;
+      border-radius: 999px;
+      border: 1px solid var(--accent-soft);
+      background: #e5f5eb;
+      color: var(--accent);
+      padding: 0.25rem 0.7rem;
+      cursor: pointer;
+    }
+
+    .importer-status {
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    .importer-status.error {
+      color: #b03030;
+    }
+
+    .importer-status.success {
+      color: #2f7c4f;
+    }
   </style>
 </head>
 <body>
@@ -383,16 +475,44 @@
           </div>
           <div class="panel-body" id="detailBody">
             <div class="empty-state">
-              Select a recipe on the left to see full ingredients, method, and usage notes.
+              Select a recipe on the left to see full ingredients, method, usage notes, and nutrition.
             </div>
           </div>
         </section>
       </div>
     </main>
+
+    <!-- Small, out-of-the-way bulk importer -->
+    <footer class="importer-footer">
+      <div class="importer-inner">
+        <details class="importer-details">
+          <summary>
+            <span>Advanced: Bulk importer (merge two recipe JSON files and download a combined file)</span>
+          </summary>
+          <div class="importer-body">
+            <div class="importer-col">
+              <label for="importExisting"><strong>1.</strong> Existing cookbook JSON (your current <code>recipes.json</code>)</label>
+              <input id="importExisting" type="file" accept="application/json" />
+            </div>
+            <div class="importer-col">
+              <label for="importNew"><strong>2.</strong> New recipes JSON (extra recipes I generate for you)</label>
+              <input id="importNew" type="file" accept="application/json" />
+            </div>
+          </div>
+          <div class="importer-actions">
+            <button type="button" class="importer-btn" id="importMergeBtn">
+              Merge &amp; Download merged_recipes.json
+            </button>
+            <div id="importStatus" class="importer-status">
+              Tip: this never changes your live site automatically – it just gives you a merged file to upload as your new <code>recipes.json</code>.
+            </div>
+          </div>
+        </details>
+      </div>
+    </footer>
   </div>
 
   <script>
-    // CHANGE THIS ONLY IF YOU USE A DIFFERENT NAME IN THE REPO
     const RECIPES_JSON_URL = "recipes.json";
 
     let allRecipes = [];
@@ -462,7 +582,6 @@
         return haystack.toLowerCase().includes(term);
       });
 
-      // If selected recipe is filtered out, clear detail
       if (selectedId && !filteredRecipes.some(r => r.id === selectedId)) {
         selectedId = null;
         renderRecipeDetail(null);
@@ -493,7 +612,6 @@
         return;
       }
 
-      // Group by section
       const bySection = {};
       filteredRecipes.forEach(r => {
         const sec = r.section || "Uncategorized";
@@ -542,7 +660,7 @@
     function renderRecipeDetail(recipe) {
       if (!recipe) {
         detailBodyEl.innerHTML =
-          '<div class="empty-state">Select a recipe on the left to see full ingredients, method, and usage notes.</div>';
+          '<div class="empty-state">Select a recipe on the left to see full ingredients, method, usage notes, and nutrition.</div>';
         return;
       }
 
@@ -560,7 +678,8 @@
 
       const metaEl = document.createElement("div");
       metaEl.className = "detail-meta";
-      metaEl.textContent = (recipe.section ? recipe.section + " · " : "") + (recipe.meta || "");
+      metaEl.textContent =
+        (recipe.section ? recipe.section + " · " : "") + (recipe.meta || "");
 
       const badgeRow = document.createElement("div");
       badgeRow.className = "detail-badge-row";
@@ -631,16 +750,10 @@
       }
     }
 
-    // Cook mode: just a UI mode to keep the layout simple, with the idea
-    // that the user leaves the detail pane up while cooking.
     cookModeToggle.addEventListener("click", () => {
       cookMode = !cookMode;
       cookModeToggle.classList.toggle("active", cookMode);
-      if (cookMode) {
-        cookModeToggle.textContent = "Cook Mode On";
-      } else {
-        cookModeToggle.textContent = "Cook Mode";
-      }
+      cookModeToggle.textContent = cookMode ? "Cook Mode On" : "Cook Mode";
     });
 
     searchInput.addEventListener("input", () => {
@@ -652,6 +765,101 @@
     });
 
     loadRecipes();
+
+    // --- Bulk importer logic (small, advanced, file-based) ---
+
+    const importExistingInput = document.getElementById("importExisting");
+    const importNewInput = document.getElementById("importNew");
+    const importMergeBtn = document.getElementById("importMergeBtn");
+    const importStatus = document.getElementById("importStatus");
+
+    function readJsonFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("File read error"));
+        reader.onload = () => {
+          try {
+            const json = JSON.parse(reader.result);
+            if (!Array.isArray(json)) {
+              reject(new Error("JSON file must contain an array of recipes."));
+            } else {
+              resolve(json);
+            }
+          } catch (e) {
+            reject(new Error("Invalid JSON file."));
+          }
+        };
+        reader.readAsText(file);
+      });
+    }
+
+    function mergeRecipes(existing, incoming) {
+      const map = new Map();
+      existing.forEach(r => {
+        if (r && r.id) {
+          map.set(r.id, r);
+        }
+      });
+
+      incoming.forEach(r => {
+        if (!r || !r.id) return;
+        let baseId = r.id;
+        let newId = baseId;
+        let counter = 2;
+        while (map.has(newId)) {
+          newId = baseId + "-" + counter;
+          counter++;
+        }
+        r.id = newId;
+        map.set(newId, r);
+      });
+
+      return Array.from(map.values());
+    }
+
+    importMergeBtn.addEventListener("click", async () => {
+      importStatus.className = "importer-status";
+      importStatus.textContent = "Reading files…";
+
+      const existingFile = importExistingInput.files[0];
+      const newFile = importNewInput.files[0];
+
+      if (!existingFile || !newFile) {
+        importStatus.className = "importer-status error";
+        importStatus.textContent = "Please select both the existing cookbook JSON and the new recipes JSON.";
+        return;
+      }
+
+      try {
+        const [existingArr, newArr] = await Promise.all([
+          readJsonFile(existingFile),
+          readJsonFile(newFile)
+        ]);
+
+        const merged = mergeRecipes(existingArr, newArr);
+
+        const blob = new Blob([JSON.stringify(merged, null, 2)], {
+          type: "application/json"
+        });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "recipes_merged.json";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        importStatus.className = "importer-status success";
+        importStatus.textContent =
+          `Merged ${existingArr.length} + ${newArr.length} recipes → ${merged.length} total. Downloaded as recipes_merged.json – upload that as your new recipes.json.`;
+      } catch (err) {
+        console.error(err);
+        importStatus.className = "importer-status error";
+        importStatus.textContent = err.message || "Something went wrong merging the files.";
+      }
+    });
   </script>
 </body>
 </html>
