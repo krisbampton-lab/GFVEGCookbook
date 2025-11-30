@@ -513,353 +513,374 @@
   </div>
 
   <script>
-    const RECIPES_JSON_URL = "recipes.json";
+  const RECIPES_JSON_URL = "recipes.json";
 
-    let allRecipes = [];
-    let filteredRecipes = [];
-    let selectedId = null;
-    let cookMode = false;
+  // --- Per-10g nutrition database (expandable) ---
+  // kcal, protein, carbs, fat, satfat, fiber, sugars, sodium(mg), potassium(mg)
+  const NUTRITION_DB_10G = {
+    "firm-tofu":     { kcal: 8,  protein: 1.1, carbs: 0.2, fat: 0.5, satfat: 0.1, fiber: 0.1, sugars: 0.1, sodium: 3,   potassium: 12 },
+    "tempeh":        { kcal: 10, protein: 1.8, carbs: 0.4, fat: 0.5, satfat: 0.1, fiber: 0.3, sugars: 0.1, sodium: 1,   potassium: 17 },
+    "chickpeas":     { kcal: 12, protein: 0.6, carbs: 2.0, fat: 0.2, satfat: 0.0, fiber: 0.6, sugars: 0.1, sodium: 2,   potassium: 18 },
+    "lentils":       { kcal: 11, protein: 0.9, carbs: 2.0, fat: 0.1, satfat: 0.0, fiber: 0.8, sugars: 0.1, sodium: 1,   potassium: 21 },
+    "black-beans":   { kcal: 12, protein: 0.9, carbs: 2.0, fat: 0.1, satfat: 0.0, fiber: 0.8, sugars: 0.1, sodium: 2,   potassium: 18 },
+    "kidney-beans":  { kcal: 12, protein: 0.9, carbs: 2.1, fat: 0.1, satfat: 0.0, fiber: 0.8, sugars: 0.1, sodium: 2,   potassium: 19 },
+    "white-beans":   { kcal: 11, protein: 0.8, carbs: 2.0, fat: 0.1, satfat: 0.0, fiber: 0.7, sugars: 0.1, sodium: 2,   potassium: 18 },
+    "halloumi":      { kcal: 32, protein: 2.2, carbs: 0.2, fat: 2.6, satfat: 1.7, fiber: 0.0, sugars: 0.0, sodium: 210, potassium: 7  },
+    "cheddar":       { kcal: 40, protein: 2.5, carbs: 0.2, fat: 3.3, satfat: 2.1, fiber: 0.0, sugars: 0.0, sodium: 70,  potassium: 7  },
+    "olive-oil":     { kcal: 88, protein: 0.0, carbs: 0.0, fat: 10.0, satfat: 1.4, fiber: 0.0, sugars: 0.0, sodium: 0,  potassium: 0  },
+    "canola-oil":    { kcal: 88, protein: 0.0, carbs: 0.0, fat: 10.0, satfat: 0.7, fiber: 0.0, sugars: 0.0, sodium: 0,  potassium: 0  },
+    "coconut-milk":  { kcal: 18, protein: 0.2, carbs: 0.2, fat: 1.8, satfat: 1.6, fiber: 0.1, sugars: 0.1, sodium: 2,   potassium: 16 },
+    "rice-cooked":   { kcal: 13, protein: 0.3, carbs: 2.9, fat: 0.0, satfat: 0.0, fiber: 0.1, sugars: 0.0, sodium: 0,   potassium: 1  },
+    "pasta-gf":      { kcal: 14, protein: 0.5, carbs: 2.9, fat: 0.1, satfat: 0.0, fiber: 0.2, sugars: 0.0, sodium: 0,   potassium: 1  },
+    "sweet-potato":  { kcal: 9,  protein: 0.1, carbs: 2.1, fat: 0.0, satfat: 0.0, fiber: 0.3, sugars: 0.9, sodium: 3,   potassium: 30 },
+    "broccoli":      { kcal: 3,  protein: 0.3, carbs: 0.5, fat: 0.0, satfat: 0.0, fiber: 0.2, sugars: 0.1, sodium: 2,   potassium: 26 },
+    "spinach":       { kcal: 2,  protein: 0.3, carbs: 0.3, fat: 0.0, satfat: 0.0, fiber: 0.1, sugars: 0.0, sodium: 6,   potassium: 28 }
+    // Expand this over time as we add more ingredients_meta
+  };
 
-    const searchInput = document.getElementById("searchInput");
-    const sectionFilter = document.getElementById("sectionFilter");
-    const recipesListEl = document.getElementById("recipesList");
-    const listMessageEl = document.getElementById("listMessage");
-    const detailBodyEl = document.getElementById("detailBody");
-    const resultCountEl = document.getElementById("resultCount");
-    const cookModeToggle = document.getElementById("cookModeToggle");
+  function round1(x) {
+    return Math.round(x * 10) / 10;
+  }
 
-    async function loadRecipes() {
-      try {
-        const res = await fetch(RECIPES_JSON_URL, { cache: "no-store" });
-        if (!res.ok) throw new Error("Network error loading recipes.json");
-        const data = await res.json();
-        if (!Array.isArray(data)) throw new Error("recipes.json is not an array");
-        allRecipes = data;
-        buildSectionFilter(allRecipes);
-        filteredRecipes = [...allRecipes];
-        renderRecipeList();
-        updateResultCount();
-      } catch (err) {
-        console.error(err);
-        recipesListEl.innerHTML = "";
-        listMessageEl.style.display = "block";
-        listMessageEl.className = "error-state";
-        listMessageEl.textContent =
-          "Could not load recipes.json. Check that the file exists next to index.html.";
-      }
+  function inferServings(metaStr) {
+    if (!metaStr) return 4;
+    const m = /Serves\s+(\d+)/i.exec(metaStr);
+    if (!m) return 4;
+    const n = parseInt(m[1], 10);
+    return Number.isFinite(n) && n > 0 ? n : 4;
+  }
+
+  function computeAutoNutrition(recipe) {
+    const meta = recipe.ingredients_meta;
+    if (!meta || !meta.length) return null;
+
+    const totals = {
+      kcal: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      satfat: 0,
+      fiber: 0,
+      sugars: 0,
+      sodium: 0,
+      potassium: 0
+    };
+
+    for (const item of meta) {
+      if (!item || !item.id || !item.grams) continue;
+      const db = NUTRITION_DB_10G[item.id];
+      if (!db) continue;
+      const blocks = item.grams / 10;
+      totals.kcal      += db.kcal      * blocks;
+      totals.protein   += db.protein   * blocks;
+      totals.carbs     += db.carbs     * blocks;
+      totals.fat       += db.fat       * blocks;
+      totals.satfat    += db.satfat    * blocks;
+      totals.fiber     += db.fiber     * blocks;
+      totals.sugars    += db.sugars    * blocks;
+      totals.sodium    += db.sodium    * blocks;
+      totals.potassium += db.potassium * blocks;
     }
 
-    function buildSectionFilter(recipes) {
-      const sections = Array.from(new Set(recipes.map(r => r.section || "")))
-        .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-      sectionFilter.innerHTML = '<option value="">All sections</option>';
-      sections.forEach(sec => {
-        const opt = document.createElement("option");
-        opt.value = sec;
-        opt.textContent = sec;
-        sectionFilter.appendChild(opt);
-      });
-    }
-
-    function applyFilters() {
-      const term = searchInput.value.trim().toLowerCase();
-      const section = sectionFilter.value;
-
-      filteredRecipes = allRecipes.filter(r => {
-        if (section && r.section !== section) return false;
-        if (!term) return true;
-        const haystack =
-          (r.title || "") +
-          " " +
-          (r.section || "") +
-          " " +
-          (r.meta || "") +
-          " " +
-          (r.ingredients_html || "") +
-          " " +
-          (r.usage_html || "");
-        return haystack.toLowerCase().includes(term);
-      });
-
-      if (selectedId && !filteredRecipes.some(r => r.id === selectedId)) {
-        selectedId = null;
-        renderRecipeDetail(null);
+    const servings = inferServings(recipe.meta);
+    return {
+      servings,
+      per: {
+        kcal:      round1(totals.kcal      / servings),
+        protein:   round1(totals.protein   / servings),
+        carbs:     round1(totals.carbs     / servings),
+        fat:       round1(totals.fat       / servings),
+        satfat:    round1(totals.satfat    / servings),
+        fiber:     round1(totals.fiber     / servings),
+        sugars:    round1(totals.sugars    / servings),
+        sodium:    Math.round(totals.sodium    / servings),
+        potassium: Math.round(totals.potassium / servings)
       }
+    };
+  }
 
+  function buildAutoNutritionHtml(recipe) {
+    const result = computeAutoNutrition(recipe);
+    if (!result) return null;
+    const n = result.per;
+    return `
+<section class="nutrition">
+  <h4>Nutrition (auto-calculated, approx, per serving)</h4>
+  <ul>
+    <li>Calories: ${n.kcal} kcal</li>
+    <li>Protein: ${n.protein} g</li>
+    <li>Carbohydrates: ${n.carbs} g</li>
+    <li>Fat: ${n.fat} g</li>
+    <li>Saturated Fat: ${n.satfat} g</li>
+    <li>Fiber: ${n.fiber} g</li>
+    <li>Sugars: ${n.sugars} g</li>
+    <li>Sodium: ${n.sodium} mg</li>
+    <li>Potassium: ${n.potassium} mg</li>
+  </ul>
+  <p>Calculated from ingredient estimates in this recipe. Values are approximate.</p>
+</section>`;
+  }
+
+  let allRecipes = [];
+  let filteredRecipes = [];
+  let selectedId = null;
+  let cookMode = false;
+
+  const searchInput = document.getElementById("searchInput");
+  const sectionFilter = document.getElementById("sectionFilter");
+  const recipesListEl = document.getElementById("recipesList");
+  const listMessageEl = document.getElementById("listMessage");
+  const detailBodyEl = document.getElementById("detailBody");
+  const resultCountEl = document.getElementById("resultCount");
+  const cookModeToggle = document.getElementById("cookModeToggle");
+
+  async function loadRecipes() {
+    try {
+      const res = await fetch(RECIPES_JSON_URL, { cache: "no-store" });
+      if (!res.ok) throw new Error("Network error loading recipes.json");
+      const data = await res.json();
+      if (!Array.isArray(data)) throw new Error("recipes.json is not an array");
+      allRecipes = data;
+      buildSectionFilter(allRecipes);
+      filteredRecipes = [...allRecipes];
       renderRecipeList();
       updateResultCount();
-    }
-
-    function updateResultCount() {
-      const total = allRecipes.length;
-      const shown = filteredRecipes.length;
-      if (!total) {
-        resultCountEl.textContent = "";
-        return;
-      }
-      resultCountEl.textContent = `${shown} of ${total}`;
-    }
-
-    function renderRecipeList() {
+    } catch (err) {
+      console.error(err);
       recipesListEl.innerHTML = "";
-      listMessageEl.style.display = "none";
+      listMessageEl.style.display = "block";
+      listMessageEl.className = "error-state";
+      listMessageEl.textContent =
+        "Could not load recipes.json. Check that the file exists next to index.html.";
+    }
+  }
 
-      if (!filteredRecipes.length) {
-        listMessageEl.style.display = "block";
-        listMessageEl.className = "empty-state";
-        listMessageEl.textContent = "No recipes match your search or filters.";
-        return;
-      }
+  function buildSectionFilter(recipes) {
+    const sections = Array.from(new Set(recipes.map(r => r.section || "")))
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    sectionFilter.innerHTML = '<option value="">All sections</option>';
+    sections.forEach(sec => {
+      const opt = document.createElement("option");
+      opt.value = sec;
+      opt.textContent = sec;
+      sectionFilter.appendChild(opt);
+    });
+  }
 
-      const bySection = {};
-      filteredRecipes.forEach(r => {
-        const sec = r.section || "Uncategorized";
-        if (!bySection[sec]) bySection[sec] = [];
-        bySection[sec].push(r);
-      });
+  function applyFilters() {
+    const term = searchInput.value.trim().toLowerCase();
+    const section = sectionFilter.value;
 
-      const sectionNames = Object.keys(bySection).sort((a, b) =>
-        a.localeCompare(b, undefined, { sensitivity: "base" })
-      );
+    filteredRecipes = allRecipes.filter(r => {
+      if (section && r.section !== section) return false;
+      if (!term) return true;
+      const haystack =
+        (r.title || "") +
+        " " +
+        (r.section || "") +
+        " " +
+        (r.meta || "") +
+        " " +
+        (r.ingredients_html || "") +
+        " " +
+        (r.usage_html || "");
+      return haystack.toLowerCase().includes(term);
+    });
 
-      sectionNames.forEach(sec => {
-        const label = document.createElement("div");
-        label.className = "section-label";
-        label.textContent = sec;
-        recipesListEl.appendChild(label);
+    if (selectedId && !filteredRecipes.some(r => r.id === selectedId)) {
+      selectedId = null;
+      renderRecipeDetail(null);
+    }
 
-        bySection[sec].forEach(recipe => {
-          const card = document.createElement("div");
-          card.className =
-            "recipe-card" + (recipe.id === selectedId ? " selected" : "");
-          card.dataset.id = recipe.id;
+    renderRecipeList();
+    updateResultCount();
+  }
 
-          const titleEl = document.createElement("div");
-          titleEl.className = "recipe-title";
-          titleEl.textContent = recipe.title || "Untitled recipe";
+  function updateResultCount() {
+    const total = allRecipes.length;
+    const shown = filteredRecipes.length;
+    if (!total) {
+      resultCountEl.textContent = "";
+      return;
+    }
+    resultCountEl.textContent = `${shown} of ${total}`;
+  }
 
-          const metaEl = document.createElement("div");
-          metaEl.className = "recipe-meta";
-          metaEl.textContent = recipe.meta || "";
+  function renderRecipeList() {
+    recipesListEl.innerHTML = "";
+    listMessageEl.style.display = "none";
 
-          card.appendChild(titleEl);
-          card.appendChild(metaEl);
+    if (!filteredRecipes.length) {
+      listMessageEl.style.display = "block";
+      listMessageEl.className = "empty-state";
+      listMessageEl.textContent = "No recipes match your search or filters.";
+      return;
+    }
 
-          card.addEventListener("click", () => {
-            selectedId = recipe.id;
-            renderRecipeList();
-            renderRecipeDetail(recipe);
-          });
+    const bySection = {};
+    filteredRecipes.forEach(r => {
+      const sec = r.section || "Uncategorized";
+      if (!bySection[sec]) bySection[sec] = [];
+      bySection[sec].push(r);
+    });
 
-          recipesListEl.appendChild(card);
+    const sectionNames = Object.keys(bySection).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+
+    sectionNames.forEach(sec => {
+      const label = document.createElement("div");
+      label.className = "section-label";
+      label.textContent = sec;
+      recipesListEl.appendChild(label);
+
+      bySection[sec].forEach(recipe => {
+        const card = document.createElement("div");
+        card.className =
+          "recipe-card" + (recipe.id === selectedId ? " selected" : "");
+        card.dataset.id = recipe.id;
+
+        const titleEl = document.createElement("div");
+        titleEl.className = "recipe-title";
+        titleEl.textContent = recipe.title || "Untitled recipe";
+
+        const metaEl = document.createElement("div");
+        metaEl.className = "recipe-meta";
+        metaEl.textContent = recipe.meta || "";
+
+        card.appendChild(titleEl);
+        card.appendChild(metaEl);
+
+        card.addEventListener("click", () => {
+          selectedId = recipe.id;
+          renderRecipeList();
+          renderRecipeDetail(recipe);
         });
+
+        recipesListEl.appendChild(card);
       });
+    });
+  }
+
+  function renderRecipeDetail(recipe) {
+    if (!recipe) {
+      detailBodyEl.innerHTML =
+        '<div class="empty-state">Select a recipe on the left to see full ingredients, method, usage notes, and nutrition.</div>';
+      return;
     }
 
-    function renderRecipeDetail(recipe) {
-      if (!recipe) {
-        detailBodyEl.innerHTML =
-          '<div class="empty-state">Select a recipe on the left to see full ingredients, method, usage notes, and nutrition.</div>';
-        return;
-      }
+    const isHighProtein =
+      (recipe.nutrition_html || "").toLowerCase().includes("protein") ||
+      (recipe.nutrition_mode === "auto" && recipe.ingredients_meta);
 
-      const isHighProtein =
-        (recipe.nutrition_html || "").toLowerCase().includes("protein");
+    const container = document.createElement("div");
 
-      const container = document.createElement("div");
+    const header = document.createElement("div");
+    header.className = "detail-header";
 
-      const header = document.createElement("div");
-      header.className = "detail-header";
+    const titleEl = document.createElement("div");
+    titleEl.className = "detail-title";
+    titleEl.textContent = recipe.title || "Untitled recipe";
 
-      const titleEl = document.createElement("div");
-      titleEl.className = "detail-title";
-      titleEl.textContent = recipe.title || "Untitled recipe";
+    const metaEl = document.createElement("div");
+    metaEl.className = "detail-meta";
+    metaEl.textContent =
+      (recipe.section ? recipe.section + " · " : "") + (recipe.meta || "");
 
-      const metaEl = document.createElement("div");
-      metaEl.className = "detail-meta";
-      metaEl.textContent =
-        (recipe.section ? recipe.section + " · " : "") + (recipe.meta || "");
+    const badgeRow = document.createElement("div");
+    badgeRow.className = "detail-badge-row";
 
-      const badgeRow = document.createElement("div");
-      badgeRow.className = "detail-badge-row";
-
-      if (recipe.section) {
-        const b1 = document.createElement("span");
-        b1.className = "badge";
-        b1.textContent = recipe.section;
-        badgeRow.appendChild(b1);
-      }
-
-      const b2 = document.createElement("span");
-      b2.className = "badge";
-      b2.textContent = "Vegetarian · Gluten-Free";
-      badgeRow.appendChild(b2);
-
-      if (isHighProtein) {
-        const b3 = document.createElement("span");
-        b3.className = "badge";
-        b3.textContent = "High-Protein";
-        badgeRow.appendChild(b3);
-      }
-
-      header.appendChild(titleEl);
-      header.appendChild(metaEl);
-      header.appendChild(badgeRow);
-
-      const detailSections = document.createElement("div");
-      detailSections.className = "detail-sections";
-
-      const leftCol = document.createElement("div");
-      const rightCol = document.createElement("div");
-
-      const ingBlock = document.createElement("div");
-      ingBlock.className = "detail-block";
-      ingBlock.innerHTML = recipe.ingredients_html || "<p>No ingredients listed.</p>";
-
-      const methodBlock = document.createElement("div");
-      methodBlock.className = "detail-block";
-      methodBlock.innerHTML = recipe.method_html || "<p>No method provided.</p>";
-
-      const usageBlock = document.createElement("div");
-      usageBlock.className = "detail-block";
-      usageBlock.innerHTML = recipe.usage_html || "<p>No usage notes yet.</p>";
-
-      const nutritionBlock = document.createElement("div");
-      nutritionBlock.className = "detail-block";
-      nutritionBlock.innerHTML =
-        (recipe.nutrition_html || "<p>No nutrition info available.</p>") +
-        '<div class="nutrition-note">Nutrition is approximate and for guidance only.</div>';
-
-      leftCol.appendChild(ingBlock);
-      leftCol.appendChild(usageBlock);
-      rightCol.appendChild(methodBlock);
-      rightCol.appendChild(nutritionBlock);
-
-      detailSections.appendChild(leftCol);
-      detailSections.appendChild(rightCol);
-
-      container.appendChild(header);
-      container.appendChild(detailSections);
-
-      detailBodyEl.innerHTML = "";
-      detailBodyEl.appendChild(container);
-
-      if (cookMode) {
-        detailBodyEl.scrollTop = 0;
-      }
+    if (recipe.section) {
+      const b1 = document.createElement("span");
+      b1.className = "badge";
+      b1.textContent = recipe.section;
+      badgeRow.appendChild(b1);
     }
 
-    cookModeToggle.addEventListener("click", () => {
-      cookMode = !cookMode;
-      cookModeToggle.classList.toggle("active", cookMode);
-      cookModeToggle.textContent = cookMode ? "Cook Mode On" : "Cook Mode";
-    });
+    const b2 = document.createElement("span");
+    b2.className = "badge";
+    b2.textContent = "Vegetarian · Gluten-Free";
+    badgeRow.appendChild(b2);
 
-    searchInput.addEventListener("input", () => {
-      applyFilters();
-    });
-
-    sectionFilter.addEventListener("change", () => {
-      applyFilters();
-    });
-
-    loadRecipes();
-
-    // --- Bulk importer logic (small, advanced, file-based) ---
-
-    const importExistingInput = document.getElementById("importExisting");
-    const importNewInput = document.getElementById("importNew");
-    const importMergeBtn = document.getElementById("importMergeBtn");
-    const importStatus = document.getElementById("importStatus");
-
-    function readJsonFile(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onerror = () => reject(new Error("File read error"));
-        reader.onload = () => {
-          try {
-            const json = JSON.parse(reader.result);
-            if (!Array.isArray(json)) {
-              reject(new Error("JSON file must contain an array of recipes."));
-            } else {
-              resolve(json);
-            }
-          } catch (e) {
-            reject(new Error("Invalid JSON file."));
-          }
-        };
-        reader.readAsText(file);
-      });
+    if (isHighProtein) {
+      const b3 = document.createElement("span");
+      b3.className = "badge";
+      b3.textContent = "High-Protein";
+      badgeRow.appendChild(b3);
     }
 
-    function mergeRecipes(existing, incoming) {
-      const map = new Map();
-      existing.forEach(r => {
-        if (r && r.id) {
-          map.set(r.id, r);
-        }
-      });
+    header.appendChild(titleEl);
+    header.appendChild(metaEl);
+    header.appendChild(badgeRow);
 
-      incoming.forEach(r => {
-        if (!r || !r.id) return;
-        let baseId = r.id;
-        let newId = baseId;
-        let counter = 2;
-        while (map.has(newId)) {
-          newId = baseId + "-" + counter;
-          counter++;
-        }
-        r.id = newId;
-        map.set(newId, r);
-      });
+    const detailSections = document.createElement("div");
+    detailSections.className = "detail-sections";
 
-      return Array.from(map.values());
+    const leftCol = document.createElement("div");
+    const rightCol = document.createElement("div");
+
+    const ingBlock = document.createElement("div");
+    ingBlock.className = "detail-block";
+    ingBlock.innerHTML = recipe.ingredients_html || "<p>No ingredients listed.</p>";
+
+    const methodBlock = document.createElement("div");
+    methodBlock.className = "detail-block";
+    methodBlock.innerHTML = recipe.method_html || "<p>No method provided.</p>";
+
+    const usageBlock = document.createElement("div");
+    usageBlock.className = "detail-block";
+    usageBlock.innerHTML = recipe.usage_html || "<p>No usage notes yet.</p>";
+
+    const nutritionBlock = document.createElement("div");
+    nutritionBlock.className = "detail-block";
+
+    let nutHtml = null;
+    if (recipe.nutrition_mode === "auto" && recipe.ingredients_meta) {
+      nutHtml = buildAutoNutritionHtml(recipe);
+    }
+    if (!nutHtml) {
+      nutHtml = recipe.nutrition_html || "<p>No nutrition info available.</p>";
     }
 
-    importMergeBtn.addEventListener("click", async () => {
-      importStatus.className = "importer-status";
-      importStatus.textContent = "Reading files…";
+    nutritionBlock.innerHTML =
+      nutHtml +
+      '<div class="nutrition-note">Nutrition is approximate and for guidance only.</div>';
 
-      const existingFile = importExistingInput.files[0];
-      const newFile = importNewInput.files[0];
+    leftCol.appendChild(ingBlock);
+    leftCol.appendChild(usageBlock);
+    rightCol.appendChild(methodBlock);
+    rightCol.appendChild(nutritionBlock);
 
-      if (!existingFile || !newFile) {
-        importStatus.className = "importer-status error";
-        importStatus.textContent = "Please select both the existing cookbook JSON and the new recipes JSON.";
-        return;
-      }
+    detailSections.appendChild(leftCol);
+    detailSections.appendChild(rightCol);
 
-      try {
-        const [existingArr, newArr] = await Promise.all([
-          readJsonFile(existingFile),
-          readJsonFile(newFile)
-        ]);
+    container.appendChild(header);
+    container.appendChild(detailSections);
 
-        const merged = mergeRecipes(existingArr, newArr);
+    detailBodyEl.innerHTML = "";
+    detailBodyEl.appendChild(container);
 
-        const blob = new Blob([JSON.stringify(merged, null, 2)], {
-          type: "application/json"
-        });
-        const url = URL.createObjectURL(blob);
+    if (cookMode) {
+      detailBodyEl.scrollTop = 0;
+    }
+  }
 
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "recipes_merged.json";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+  cookModeToggle.addEventListener("click", () => {
+    cookMode = !cookMode;
+    cookModeToggle.classList.toggle("active", cookMode);
+    cookModeToggle.textContent = cookMode ? "Cook Mode On" : "Cook Mode";
+  });
 
-        importStatus.className = "importer-status success";
-        importStatus.textContent =
-          `Merged ${existingArr.length} + ${newArr.length} recipes → ${merged.length} total. Downloaded as recipes_merged.json – upload that as your new recipes.json.`;
-      } catch (err) {
-        console.error(err);
-        importStatus.className = "importer-status error";
-        importStatus.textContent = err.message || "Something went wrong merging the files.";
-      }
-    });
-  </script>
+  searchInput.addEventListener("input", () => {
+    applyFilters();
+  });
+
+  sectionFilter.addEventListener("change", () => {
+    applyFilters();
+  });
+
+  loadRecipes();
+</script>
 </body>
 </html>
