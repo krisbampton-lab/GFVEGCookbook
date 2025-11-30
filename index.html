@@ -483,36 +483,106 @@
     </main>
 
     <!-- Small, out-of-the-way bulk importer -->
-    <footer class="importer-footer">
-      <div class="importer-inner">
-        <details class="importer-details">
-          <summary>
-            <span>Advanced: Bulk importer (merge two recipe JSON files and download a combined file)</span>
-          </summary>
-          <div class="importer-body">
-            <div class="importer-col">
-              <label for="importExisting"><strong>1.</strong> Existing cookbook JSON (your current <code>recipes.json</code>)</label>
-              <input id="importExisting" type="file" accept="application/json" />
-            </div>
-            <div class="importer-col">
-              <label for="importNew"><strong>2.</strong> New recipes JSON (extra recipes I generate for you)</label>
-              <input id="importNew" type="file" accept="application/json" />
-            </div>
-          </div>
-          <div class="importer-actions">
-            <button type="button" class="importer-btn" id="importMergeBtn">
-              Merge &amp; Download merged_recipes.json
-            </button>
-            <div id="importStatus" class="importer-status">
-              Tip: this never changes your live site automatically – it just gives you a merged file to upload as your new <code>recipes.json</code>.
-            </div>
-          </div>
-        </details>
-      </div>
-    </footer>
-  </div>
+  <section class="tools-footer" 
+  style="border-top:1px solid #d1e2d1; padding:1rem; background:#f7faf7;">
+  
+  <details style="font-size:0.85rem;">
+    <summary style="cursor:pointer; font-weight:600; color:#2f7c4f;">
+      Tools (Export + Ingredient Meta Generator)
+    </summary>
 
-  <script>
+    <div style="margin-top:0.75rem;">
+
+      <!-- EXPORT BUTTON -->
+      <button 
+        onclick="downloadCookbook()" 
+        style="padding:0.4rem 0.9rem; border-radius:8px;
+               border:1px solid #2f7c4f; background:#e5f5eb; color:#2f7c4f;
+               margin-bottom:1rem; font-size:0.85rem;">
+        ⬇ Download Full Cookbook (recipes.json)
+      </button>
+
+      <!-- INGREDIENT META GENERATOR -->
+      <div style="margin-bottom:0.5rem; font-weight:600;">Ingredient Meta Generator</div>
+
+      <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem;">
+        <select id="metaIngId" style="flex:1; padding:0.3rem;">
+          <option value="firm-tofu">firm-tofu</option>
+          <option value="tempeh">tempeh</option>
+          <option value="chickpeas">chickpeas</option>
+          <option value="lentils">lentils</option>
+          <option value="black-beans">black-beans</option>
+          <option value="kidney-beans">kidney-beans</option>
+          <option value="white-beans">white-beans</option>
+          <option value="olive-oil">olive-oil</option>
+          <option value="coconut-milk">coconut-milk</option>
+          <option value="rice-cooked">rice-cooked</option>
+          <option value="pasta-gf">pasta-gf</option>
+          <option value="sweet-potato">sweet-potato</option>
+          <option value="spinach">spinach</option>
+        </select>
+
+        <input type="number" id="metaIngGrams" placeholder="grams" 
+               style="width:90px; padding:0.3rem;">
+        <button onclick="addMetaEntry()" 
+                style="padding:0.3rem 0.8rem; border-radius:6px; 
+                       background:#edf7ef; border:1px solid #cfe8d7;">
+          Add
+        </button>
+      </div>
+
+      <pre id="metaGenOutput" 
+           style="background:#fff; border:1px solid #cfd8cf; 
+                  padding:0.7rem; border-radius:8px; min-height:80px;">
+      </pre>
+
+      <button onclick="copyMetaOutput()" 
+              style="margin-top:0.5rem; padding:0.3rem 0.8rem; 
+                     border-radius:6px; background:#e5f5eb; 
+                     border:1px solid #2f7c4f;">
+        Copy Meta Block
+      </button>
+
+    </div>
+  </details>
+</section>
+l
+<script>
+let metaList = [];
+
+function addMetaEntry() {
+  const id = document.getElementById("metaIngId").value;
+  const grams = parseInt(document.getElementById("metaIngGrams").value, 10);
+  if (!grams || grams < 1) return;
+
+  metaList.push({ id, grams });
+  renderMeta();
+}
+
+function renderMeta() {
+  const out = document.getElementById("metaGenOutput");
+  out.textContent =
+`"nutrition_mode": "auto",
+"ingredients_meta": [
+` + metaList.map(m => `  { "id": "${m.id}", "grams": ${m.grams} }`).join(",\n") + `
+]`;
+}
+
+function copyMetaOutput() {
+  const text = document.getElementById("metaGenOutput").textContent;
+  navigator.clipboard.writeText(text.trim());
+}
+
+function downloadCookbook() {
+  const blob = new Blob([JSON.stringify(allRecipes, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "recipes.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
   const RECIPES_JSON_URL = "recipes.json";
 
   // --- Per-10g nutrition database (expandable) ---
