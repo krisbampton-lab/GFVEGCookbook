@@ -648,6 +648,43 @@
   <option value="vinegar-apple-cider">vinegar-apple-cider</option>
   <option value="miso-paste">miso-paste</option>
   <option value="nutritional-yeast">nutritional-yeast</option>
+
+   <!-- Fruits -->
+  <option value="banana">banana</option>
+  <option value="apple">apple</option>
+  <option value="pear">pear</option>
+  <option value="orange">orange</option>
+  <option value="lemon-juice">lemon-juice</option>
+  <option value="lime-juice">lime-juice</option>
+  <option value="mango">mango</option>
+  <option value="pineapple">pineapple</option>
+  <option value="strawberries">strawberries</option>
+  <option value="blueberries">blueberries</option>
+  <option value="raspberries">raspberries</option>
+  <option value="dates-medjool">dates-medjool</option>
+  <option value="raisins">raisins</option>
+
+  <!-- Spices & seasonings -->
+  <option value="garlic-powder">garlic-powder</option>
+  <option value="onion-powder">onion-powder</option>
+  <option value="paprika">paprika</option>
+  <option value="smoked-paprika">smoked-paprika</option>
+  <option value="cumin-ground">cumin-ground</option>
+  <option value="coriander-ground">coriander-ground</option>
+  <option value="chili-powder">chili-powder</option>
+  <option value="curry-powder">curry-powder</option>
+  <option value="turmeric-ground">turmeric-ground</option>
+  <option value="ginger-fresh">ginger-fresh</option>
+  <option value="ginger-ground">ginger-ground</option>
+  <option value="black-pepper">black-pepper</option>
+  <option value="cinnamon-ground">cinnamon-ground</option>
+  <option value="herbs-mixed-dry">herbs-mixed-dry</option>
+
+<!-- High-sodium bases -->
+  <option value="table-salt">table-salt</option>
+  <option value="veg-stock-paste">veg-stock-paste</option>
+  <option value="veg-stock-cube">veg-stock-cube</option>
+            
 </select>
 
               <input type="number" id="metaIngGrams" placeholder="grams"
@@ -769,6 +806,45 @@ const NUTRITION_DB_10G = {
   "vinegar-apple-cider": { kcal: 0, protein: 0.0, carbs: 0.0, fat: 0.0, satfat: 0.0, fiber: 0.0, sugars: 0.0, sodium: 0, potassium: 0  },
   "miso-paste":       { kcal: 20, protein: 1.2, carbs: 2.5, fat: 0.6, satfat: 0.1, fiber: 0.3, sugars: 1.0, sodium: 370, potassium: 30 },
   "nutritional-yeast":{ kcal: 35, protein: 5.0, carbs: 3.5, fat: 0.5, satfat: 0.1, fiber: 2.0, sugars: 0.0, sodium: 5,   potassium: 50 }
+
+  // --- FRUITS ---
+  "banana":              { kcal: 9,  protein: 0.1, carbs: 2.3, fat: 0.0, satfat: 0.0, fiber: 0.3, sugars: 1.4, sodium: 0,  potassium: 36 },
+  "apple":               { kcal: 5,  protein: 0.0, carbs: 1.4, fat: 0.0, satfat: 0.0, fiber: 0.2, sugars: 1.1, sodium: 0,  potassium: 6  },
+  "pear":                { kcal: 6,  protein: 0.0, carbs: 1.6, fat: 0.0, satfat: 0.0, fiber: 0.2, sugars: 1.3, sodium: 0,  potassium: 7  },
+  "orange":              { kcal: 5,  protein: 0.1, carbs: 1.3, fat: 0.0, satfat: 0.0, fiber: 0.2, sugars: 1.1, sodium: 0,  potassium: 13 },
+  "lemon-juice":         { kcal: 3,  protein: 0.0, carbs: 1.0, fat: 0.0, satfat: 0.0, fiber: 0.0, sugars: 0.3, sodium: 0,  potassium: 5  },
+  "lime-juice":          { kcal: 3,  protein: 0.0, carbs: 1.0, fat: 0.0, satfat: 0.0, fiber: 0.0, sugars: 0.3, sodium: 0,  potassium: 4  },
+  "mango":               { kcal: 6,  protein: 0.1, carbs: 1.5, fat: 0.0, satfat: 0.0, fiber: 0.2, sugars: 1.3, sodium: 0,  potassium: 7  },
+  "pineapple":           { kcal: 5,  protein: 0.0, carbs: 1.3, fat: 0.0, satfat: 0.0, fiber: 0.1, sugars: 1.0, sodium: 0,  potassium: 4  },
+  "strawberries":        { kcal: 3,  protein: 0.1, carbs: 0.7, fat: 0.0, satfat: 0.0, fiber: 0.2, sugars: 0.4, sodium: 0,  potassium: 7  },
+  "blueberries":         { kcal: 6,  protein: 0.1, carbs: 1.5, fat: 0.0, satfat: 0.0, fiber: 0.2, sugars: 1.1, sodium: 0,  potassium: 5  },
+  "raspberries":         { kcal: 5,  protein: 0.1, carbs: 1.2, fat: 0.0, satfat: 0.0, fiber: 0.3, sugars: 0.5, sodium: 0,  potassium: 7  },
+  "dates-medjool":       { kcal: 28, protein: 0.2, carbs: 7.5, fat: 0.0, satfat: 0.0, fiber: 0.8, sugars: 6.5, sodium: 1,  potassium: 65 },
+  "raisins":             { kcal: 30, protein: 0.3, carbs: 7.9, fat: 0.0, satfat: 0.0, fiber: 0.4, sugars: 7.3, sodium: 2,  potassium: 75 }
+
+  // --- SPICES, HERBS & SEASONINGS ---
+  "garlic-powder":       { kcal: 33, protein: 1.6, carbs: 7.4, fat: 0.0, satfat: 0.0, fiber: 0.5, sugars: 0.3, sodium: 5,   potassium: 40 },
+  "onion-powder":        { kcal: 34, protein: 1.0, carbs: 7.9, fat: 0.1, satfat: 0.0, fiber: 0.7, sugars: 2.3, sodium: 5,   potassium: 30 },
+
+  "paprika":             { kcal: 29, protein: 1.4, carbs: 6.0, fat: 0.9, satfat: 0.1, fiber: 3.4, sugars: 0.8, sodium: 5,   potassium: 80 },
+  "smoked-paprika":      { kcal: 29, protein: 1.4, carbs: 6.0, fat: 0.9, satfat: 0.1, fiber: 3.4, sugars: 0.8, sodium: 5,   potassium: 80 },
+  "cumin-ground":        { kcal: 38, protein: 1.8, carbs: 4.6, fat: 1.9, satfat: 0.2, fiber: 2.2, sugars: 0.1, sodium: 8,   potassium: 80 },
+  "coriander-ground":    { kcal: 30, protein: 1.3, carbs: 5.5, fat: 0.7, satfat: 0.1, fiber: 3.3, sugars: 0.1, sodium: 5,   potassium: 66 },
+  "chili-powder":        { kcal: 29, protein: 1.3, carbs: 5.3, fat: 1.2, satfat: 0.2, fiber: 2.6, sugars: 0.8, sodium: 80,  potassium: 70 },
+  "curry-powder":        { kcal: 28, protein: 1.2, carbs: 4.4, fat: 1.3, satfat: 0.4, fiber: 2.4, sugars: 0.3, sodium: 15,  potassium: 70 },
+  "turmeric-ground":     { kcal: 31, protein: 0.9, carbs: 6.5, fat: 0.7, satfat: 0.2, fiber: 2.1, sugars: 0.2, sodium: 2,   potassium: 70 },
+
+  "ginger-fresh":        { kcal: 8,  protein: 0.2, carbs: 1.8, fat: 0.1, satfat: 0.0, fiber: 0.2, sugars: 0.3, sodium: 2,   potassium: 37 },
+  "ginger-ground":       { kcal: 33, protein: 0.9, carbs: 7.2, fat: 0.4, satfat: 0.1, fiber: 1.7, sugars: 0.3, sodium: 4,   potassium: 40 },
+  "black-pepper":        { kcal: 25, protein: 1.0, carbs: 6.4, fat: 0.3, satfat: 0.1, fiber: 2.6, sugars: 0.1, sodium: 2,   potassium: 40 },
+  "cinnamon-ground":     { kcal: 25, protein: 0.4, carbs: 8.1, fat: 0.1, satfat: 0.0, fiber: 5.4, sugars: 0.2, sodium: 1,   potassium: 45 },
+
+ "herbs-mixed-dry":     { kcal: 27, protein: 2.5, carbs: 3.4, fat: 0.5, satfat: 0.1, fiber: 2.6, sugars: 0.2, sodium: 15,  potassium: 70 },
+
+// High-sodium bases
+ "table-salt":          { kcal: 0,  protein: 0.0, carbs: 0.0, fat: 0.0, satfat: 0.0, fiber: 0.0, sugars: 0.0, sodium: 3870, potassium: 0 },
+ "veg-stock-paste":     { kcal: 9,  protein: 0.4, carbs: 1.2, fat: 0.3, satfat: 0.1, fiber: 0.1, sugars: 0.2, sodium: 700, potassium: 30 },
+ "veg-stock-cube":      { kcal: 9,  protein: 0.4, carbs: 1.2, fat: 0.3, satfat: 0.1, fiber: 0.1, sugars: 0.2, sodium: 900, potassium: 30 }
 };
 
     function round1(x) { return Math.round(x * 10) / 10; }
