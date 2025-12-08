@@ -705,25 +705,6 @@
               Copy Meta Block
             </button>
 
-            <hr style="margin:1rem 0; border:none; border-top:1px solid #d1e2d1;">
-
-            <div style="margin-bottom:0.5rem; font-weight:600;">
-              Ingredient Coverage Checker
-            </div>
-
-            <button type="button"
-                    onclick="scanIngredientCoverage()"
-                    style="padding:0.3rem 0.8rem;
-                           border-radius:6px;
-                           background:#edf7ef;
-                           border:1px solid #cfe8d7;
-                           margin-bottom:0.4rem;">
-              Scan recipes for missing ingredients
-            </button>
-
-            <pre id="ingredientScanOutput"
-                 style="max-height:220px; overflow:auto;"></pre>
-
           </div>
         </details>
       </div>
@@ -877,28 +858,190 @@ const NUTRITION_DB_10G = {
     }
 
     
-    // Get ingredient metadata either from ingredients_meta (JSON)
-    // or from data-id / data-grams attributes inside ingredients_html.
-    function getIngredientsMeta(recipe) {
-      if (Array.isArray(recipe.ingredients_meta) && recipe.ingredients_meta.length) {
-        return recipe.ingredients_meta;
+    // --- Heuristic macros parsing from ingredients_html only ---
+
+    const CAN_BEANS_GRAMS   = 540;   // 1 can beans ≈ 540 g (wet weight)
+    const CAN_TOMATO_GRAMS  = 400;   // 1 can tomatoes ≈ 400 g
+    const TBSP_OIL_GRAMS    = 15;    // 1 tbsp oil
+    const TBSP_GENERIC_GRAMS = 12;   // 1 tbsp syrups / misc liquids
+    const CUP_COOKED_BEANS_G = 170;  // ~1 cup cooked beans
+    const CUP_COOKED_RICE_G  = 180;  // ~1 cup cooked rice
+    const SPRINKLE_FLOUR_G   = 5;    // sprinkle flour
+    const PINCH_SALT_G       = 1;    // pinch salt (ignored mostly)
+
+    function normalizeFractions(text) {
+      return text
+        .replace(/½/g, "0.5")
+        .replace(/¼/g, "0.25")
+        .replace(/¾/g, "0.75")
+        .replace(/⅓/g, "0.33")
+        .replace(/⅔/g, "0.67");
+    }
+
+    function parseQuantityAndUnit(rawLine) {
+      let text = normalizeFractions(rawLine.toLowerCase());
+
+      const rangeMatch = text.match(/(\d+(\.\d+)?)\s*[-–]\s*(\d+(\.\d+)?)/);
+      let quantity = null;
+      if (rangeMatch) {
+        quantity = parseFloat(rangeMatch[1]);
+      } else {
+        const numMatch = text.match(/(\d+(\.\d+)?)/);
+        if (numMatch) quantity = parseFloat(numMatch[1]);
       }
-      if (recipe.ingredients_html) {
-        return extractIngredientsMetaFromHtml(recipe.ingredients_html);
+
+      let unit = null;
+      if (text.includes("can ")) unit = "can";
+      else if (text.includes("cans ")) unit = "can";
+      else if (text.includes("cup ")) unit = "cup";
+      else if (text.includes("cups ")) unit = "cup";
+      else if (text.includes("tbsp") || text.includes("tablespoon")) unit = "tbsp";
+      else if (text.includes("tsp") || text.includes("teaspoon")) unit = "tsp";
+      else if (text.includes("g ") || text.endsWith(" g")) unit = "g";
+      else if (text.includes("ml")) unit = "ml";
+      else if (text.includes("drizzle")) unit = "drizzle";
+      else if (text.includes("sprinkle")) unit = "sprinkle";
+      else if (text.includes("pinch")) unit = "pinch";
+
+      if (!quantity) {
+        if (unit === "can" || unit === "drizzle" || unit === "sprinkle" || unit === "pinch") {
+          quantity = 1;
+        }
       }
+
+      return { quantity, unit };
+    }
+
+    function mapTextToIngredientId(text) {
+      const t = text.toLowerCase();
+
+      if (t.includes("black bean"))   return "black-beans";
+      if (t.includes("kidney bean"))  return "kidney-beans";
+      if (t.includes("chickpea") || t.includes("garbanzo")) return "chickpeas";
+      if (t.includes("navy bean") || t.includes("pinto bean") || t.includes("white bean"))
+        return "white-beans";
+
+      if (t.includes("tomato") && t.includes("can")) return "tomato-canned";
+
+      if (t.includes("olive oil"))   return "olive-oil";
+      if (t.includes("canola oil"))  return "canola-oil";
+      if (t.includes("neutral oil") || t.includes("vegetable oil")) return "olive-oil";
+
+      if (t.includes("cooked rice"))   return "rice-cooked";
+      if (t.includes("gf pasta") || t.includes("gluten-free pasta") || t.includes("pasta"))
+        return "pasta-gf";
+
+      if (t.includes("maple syrup"))  return "maple-syrup";
+      if (t.includes("honey"))        return "honey";
+
+      if (t.includes("gf flour") || t.includes("gluten-free flour")) return "flour-gf-mix";
+      if (t.includes("all-purpose flour") || t.includes("plain flour") || t.includes("flour"))
+        return "flour-wheat";
+
+      if (t.includes("veg stock paste") || t.includes("vegetable stock paste") || t.includes("bouillon paste"))
+        return "veg-stock-paste";
+
       return null;
     }
 
-    function extractIngredientsMetaFromHtml(html) {
+    function estimateGrams(id, quantity, unit, lineText) {
+      const t = lineText.toLowerCase();
+      let grams = null;
+
+      const gramMatch = t.match(/(\d+(\.\d+)?)\s*g\b/);
+      if (gramMatch) {
+        grams = parseFloat(gramMatch[1]);
+        return { grams, source: "exact" };
+      }
+
+      if (unit === "can") {
+        if (id === "tomato-canned") {
+          grams = (quantity || 1) * CAN_TOMATO_GRAMS;
+          return { grams, source: "unit" };
+        }
+        if (id && id.endsWith("beans")) {
+          grams = (quantity || 1) * CAN_BEANS_GRAMS;
+          return { grams, source: "unit" };
+        }
+      }
+
+      if (unit === "cup") {
+        if (id && id.endsWith("beans")) {
+          grams = (quantity || 1) * CUP_COOKED_BEANS_G;
+          return { grams, source: "unit" };
+        }
+        if (id === "rice-cooked") {
+          grams = (quantity || 1) * CUP_COOKED_RICE_G;
+          return { grams, source: "unit" };
+        }
+      }
+
+      if (unit === "tbsp" || unit === "tsp" || unit === "drizzle") {
+        const q = quantity || 1;
+        if (id === "olive-oil" || id === "canola-oil") {
+          if (unit === "tsp") {
+            grams = q * (TBSP_OIL_GRAMS / 3);
+          } else {
+            grams = q * TBSP_OIL_GRAMS;
+          }
+          return { grams, source: "unit" };
+        }
+        if (id === "maple-syrup" || id === "honey") {
+          const perTbsp = TBSP_GENERIC_GRAMS;
+          if (unit === "tsp") grams = q * (perTbsp / 3);
+          else grams = q * perTbsp;
+          return { grams, source: "unit" };
+        }
+      }
+
+      if (unit === "sprinkle" && (id === "flour-wheat" || id === "flour-gf-mix")) {
+        grams = SPRINKLE_FLOUR_G;
+        return { grams, source: "guess" };
+      }
+      if (unit === "pinch") {
+        grams = PINCH_SALT_G;
+        return { grams, source: "guess" };
+      }
+
+      if (id && quantity) {
+        if (id.endsWith("beans")) {
+          grams = quantity * 100;
+          return { grams, source: "guess" };
+        }
+        if (id === "tomato-canned") {
+          grams = quantity * 300;
+          return { grams, source: "guess" };
+        }
+      }
+
+      return { grams: null, source: "guess" };
+    }
+
+    function parseIngredientLine(line) {
+      const raw = line.trim();
+      if (!raw) return null;
+
+      const { quantity, unit } = parseQuantityAndUnit(raw);
+      const id = mapTextToIngredientId(raw);
+      if (!id) return null;
+
+      const { grams } = estimateGrams(id, quantity, unit, raw);
+      if (!grams || grams <= 0) return null;
+
+      return { id, grams };
+    }
+
+    function getIngredientsMeta(recipe) {
+      if (!recipe.ingredients_html) return null;
       const tmp = document.createElement("div");
-      tmp.innerHTML = html;
+      tmp.innerHTML = recipe.ingredients_html;
       const items = [];
-      tmp.querySelectorAll("[data-id][data-grams]").forEach(el => {
-        const id = el.getAttribute("data-id")?.trim();
-        const grams = parseFloat(el.getAttribute("data-grams"));
-        if (!id) return;
-        if (!Number.isFinite(grams) || grams <= 0) return;
-        items.push({ id, grams });
+      tmp.querySelectorAll("ul li").forEach(li => {
+        const lineText = li.textContent || "";
+        const parsed = parseIngredientLine(lineText);
+        if (parsed && parsed.id && parsed.grams && parsed.grams > 0) {
+          items.push(parsed);
+        }
       });
       return items.length ? items : null;
     }
@@ -944,29 +1087,7 @@ const NUTRITION_DB_10G = {
         }
       };
     }
-
-function buildAutoNutritionHtml(recipe) {
-      const result = computeAutoNutrition(recipe);
-      if (!result) return null;
-      const n = result.per;
-      return `
-<h4>Nutrition (auto-calculated, approx, per serving)</h4>
-<ul>
-  <li>Calories: ${n.kcal} kcal</li>
-  <li>Protein: ${n.protein} g</li>
-  <li>Carbohydrates: ${n.carbs} g</li>
-  <li>Fat: ${n.fat} g</li>
-  <li>Saturated Fat: ${n.satfat} g</li>
-  <li>Fiber: ${n.fiber} g</li>
-  <li>Sugars: ${n.sugars} g</li>
-  <li>Sodium: ${n.sodium} mg</li>
-  <li>Potassium: ${n.potassium} mg</li>
-</ul>
-<p>Calculated from ingredient estimates in this recipe. Values are approximate.</p>
-`;
-    }
-
-    let allRecipes = [];
+let allRecipes = [];
     let filteredRecipes = [];
     let selectedId = null;
     let cookMode = false;
@@ -1120,12 +1241,9 @@ function buildAutoNutritionHtml(recipe) {
         return;
       }
 
-      const hasAutoNutrition =
-        (recipe.nutrition_mode || "auto") === "auto" && !!getIngredientsMeta(recipe);
-
       const isHighProtein =
         (recipe.nutrition_html || "").toLowerCase().includes("protein") ||
-        hasAutoNutrition;
+        ((recipe.nutrition_mode || "auto") === "auto" && getIngredientsMeta(recipe));
 
       const container = document.createElement("div");
 
@@ -1213,8 +1331,7 @@ function buildAutoNutritionHtml(recipe) {
       nutritionBlock.className = "detail-block";
 
       let nutHtml = null;
-      const mode = recipe.nutrition_mode || "auto";
-      if (mode === "auto" && getIngredientsMeta(recipe)) {
+      if ((recipe.nutrition_mode || "auto") === "auto" && getIngredientsMeta(recipe)) {
         nutHtml = buildAutoNutritionHtml(recipe);
       }
       if (!nutHtml) {
@@ -1404,91 +1521,7 @@ function buildAutoNutritionHtml(recipe) {
       navigator.clipboard.writeText(text.trim());
     }
 
-    
-    // Collect all ingredient IDs used in a recipe
-    // from both ingredients_meta and data-id attributes in ingredients_html.
-    function collectIngredientIdsFromRecipe(recipe) {
-      const ids = new Set();
-
-      if (Array.isArray(recipe.ingredients_meta)) {
-        recipe.ingredients_meta.forEach(m => {
-          if (m && m.id) ids.add(m.id);
-        });
-      }
-
-      if (recipe.ingredients_html) {
-        const tmp = document.createElement("div");
-        tmp.innerHTML = recipe.ingredients_html;
-        tmp.querySelectorAll("[data-id]").forEach(el => {
-          const id = el.getAttribute("data-id");
-          if (id && id.trim()) ids.add(id.trim());
-        });
-      }
-
-      return ids;
-    }
-
-    // Scan all recipes vs NUTRITION_DB_10G and show coverage.
-    function scanIngredientCoverage() {
-      if (!allRecipes || !allRecipes.length) {
-        alert("No recipes loaded yet. Check that recipes.json is loading.");
-        return;
-      }
-
-      const usedIds = new Set();
-      const idToRecipes = new Map();
-
-      allRecipes.forEach(recipe => {
-        const ids = collectIngredientIdsFromRecipe(recipe);
-        ids.forEach(id => {
-          usedIds.add(id);
-          if (!idToRecipes.has(id)) idToRecipes.set(id, []);
-          idToRecipes.get(id).push(recipe.title || recipe.id || "Untitled");
-        });
-      });
-
-      const dbIds = new Set(Object.keys(NUTRITION_DB_10G));
-      const covered = [];
-      const missing = [];
-
-      usedIds.forEach(id => {
-        if (dbIds.has(id)) covered.push(id);
-        else missing.push(id);
-      });
-
-      covered.sort();
-      missing.sort();
-
-      const outEl = document.getElementById("ingredientScanOutput");
-      const lines = [];
-
-      lines.push(`Total recipes: ${allRecipes.length}`);
-      lines.push(`Unique ingredient IDs used: ${usedIds.size}`);
-      lines.push(`Covered in NUTRITION_DB_10G: ${covered.length}`);
-      lines.push(`Missing from NUTRITION_DB_10G: ${missing.length}`);
-      lines.push("");
-
-      if (missing.length) {
-        lines.push("Missing IDs and example recipes:");
-        missing.forEach(id => {
-          const titles = idToRecipes.get(id) || [];
-          const sample = titles.slice(0, 3).join(" | ");
-          lines.push(`- ${id}  ← used in: ${sample}`);
-        });
-
-        lines.push("");
-        lines.push("Skeleton entries to paste into NUTRITION_DB_10G:");
-        missing.forEach(id => {
-          lines.push(`  "${id}": { kcal: 0, protein: 0, carbs: 0, fat: 0, satfat: 0, fiber: 0, sugars: 0, sodium: 0, potassium: 0 },`);
-        });
-      } else {
-        lines.push("All ingredient IDs used in recipes are covered in NUTRITION_DB_10G. 🎉");
-      }
-
-      outEl.textContent = lines.join("\n");
-    }
-
-function downloadCookbook() {
+    function downloadCookbook() {
       const blob = new Blob([JSON.stringify(allRecipes, null, 2)], {type:"application/json"});
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
